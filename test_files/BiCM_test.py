@@ -38,6 +38,9 @@ def main():
         if edge_names[1] not in connected_users:
             connected_users.append(edge_names[1])
     np.savetxt('projection_edge_list.csv', edge_list, delimiter=',', fmt=('%s', '%s'))
+    all_all_names = [(name, name) for name in connected_users]
+    np.savetxt('all_names.csv', all_all_names, delimiter=',', fmt=('%s', '%s'),
+                  header='id,label', comments='')
 
 if __name__ == "__main__":
     main()
