@@ -47,7 +47,7 @@ def jac(xx, multiplier_rows, multiplier_cols, nrows, ncols, out_J_T):
 
 @jit(nopython=True)
 def solve_iterations(n_edges, r_dseq_rows, r_dseq_cols, rows_multiplicity, cols_multiplicity,
-                     tolerance=1e-8, max_iter=5000, print_counter=False):
+                     tolerance=1e-10, max_iter=5000):#, print_counter=False):
     '''
     Numerically solve the system of nonlinear equations
     we encounter when solving for the Lagrange multipliers
@@ -61,25 +61,23 @@ def solve_iterations(n_edges, r_dseq_rows, r_dseq_cols, rows_multiplicity, cols_
     '''
     X = r_dseq_rows / np.sqrt(n_edges)
     Y = r_dseq_cols / np.sqrt(n_edges)
-    x = r_dseq_rows * 0
-    y = r_dseq_cols * 0
+    x = r_dseq_rows * 0.
+    y = r_dseq_cols * 0.
     change = 1
-    t1 = time.time()
     for counter in range(max_iter):
-        for i in range(r_n):
-            x[i] = self.r_dseq_rows[i] / np.sum(Y * cols_multiplicity / (1. + X[i] * Y))
-        for i in range(r_m):
-            y[i] = self.r_dseq_cols[i] / np.sum(X * rows_multiplicity / (1. + X * Y[i]))
+        for i in range(len(x)):
+            x[i] = r_dseq_rows[i] / np.sum(Y * cols_multiplicity / (1. + X[i] * Y))
+        for i in range(len(y)):
+            y[i] = r_dseq_cols[i] / np.sum(X * rows_multiplicity / (1. + X * Y[i]))
         change = max(np.max(np.abs(X - x)), np.max(np.abs(Y - y)))
         X[:] = x
         Y[:] = y
         if change < tolerance: 
             break
-    t2 = time.time()
     if change > tolerance:
         raise Exception("Solver did not converge. Try increasing max_iter")
-    if print_counter == True:
-        print("Solver converged in {} iterations.".format(counter))
+#     if print_counter == True:
+#         print("Solver converged in " + repr(counter) + " iterations.")
     return x, y
 
 class BiCM_class:
