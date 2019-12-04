@@ -144,7 +144,7 @@ class PvalClass:
             probs = self.avg_mat[v_couple[0][0]] * self.avg_mat[v_couple[0][1]]
         pb_obj = pb.PoiBin(probs)
 #         pvals_list = np.zeros(len(v_couple[2]), dtype=float)
-        pvals_list = [(v[0], v[1], pb_obj.pval(int(v[2]))) for v in v_couple[2]]
+        pvals_list = [(v[0], v[1], pb_obj.pval(int(v[2]))) for v in v_couple]
 #         for v_index in v_couple[2]:
 #             inverse_pos = np.where(pos_v == v_index)[0]
 #             pvals_list[inverse_pos] = (i, j, pb_obj.pval(int(unique_v[v_index])))
@@ -162,13 +162,18 @@ class PvalClass:
             func = partial(self.pval_calculator)
             self.pval_list = parmap(func, tqdm_notebook(v_list))
         else:
-            self.r_x, self.r_invert_x = np.unique(self.x, return_inverse=True)
-            self.r_n_rows = len(self.r_x)
+            if self.light_mode:
+                r_x, r_invert = np.unique(self.x, return_inverse=True)
+                r_n_rows = len(r_x)
+            else:
+                r_deg, r_invert = np.unique(self.avg_mat.sum(1), return_inverse=True)
+                r_n_rows = len(r_deg)
             v_list_coupled = []
-            for i in range(self.r_n_rows):
-                for j in range(i, self.r_n_rows):
-                    pos = np.where(np.isin(self.r_invert_x, [i, j]))[0]
-                    red_v_list = [v for v in v_list if v[0] in pos and v[1] in pos]
+            for i in range(r_n_rows):
+                pos_i = np.where(r_invert == i)[0]
+                for j in range(i, r_n_rows):
+                    pos_j = np.where(r_invert == j)[0]
+                    red_v_list = [v for v in v_list if (v[0] in pos_i and v[1] in pos_j) or (v[0] in pos_j and v[1] in pos_i)]
                     if len(red_v_list) > 0:
                         v_list_coupled.append(red_v_list)
             if self.threads_num > 1:
