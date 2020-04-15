@@ -44,7 +44,6 @@ Guide
 .. toctree::
    :maxdepth: 2
    :numbered:
-   :caption: Contents:
    
    license
    help
