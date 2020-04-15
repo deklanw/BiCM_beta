@@ -8,6 +8,28 @@ from tqdm import tqdm_notebook
 from BiCM_class import BiCM_class as bicm
 from numba import jit
 from Pval_class import PvalClass as pval_class
+import multiprocessing as mp
+
+def fun(f, q_in, q_out):
+    while True:
+        i, x = q_in.get()
+        if i is None:
+            break
+        q_out.put((i, f(x)))
+
+def parmap(f, X, threads_num=4):
+    q_in = mp.Queue(1)
+    q_out = mp.Queue()
+    proc = [mp.Process(target=fun, args=(f, q_in, q_out))
+            for _ in range(threads_num)]
+    for p in proc:
+        p.daemon = True
+        p.start()
+    sent = [q_in.put((i, x)) for i, x in enumerate(X)]
+    [q_in.put((None, None)) for _ in range(threads_num)]
+    res = [q_out.get() for _ in range(len(sent))]
+    [p.join() for p in proc]
+    return [x for i, x in sorted(res)]
 
 def pval_calculator_poibin(v_mat, avg_mat, r_invert_rows_degs, degrees_couple, method='poibin', r_invert_rows_degs_in=[]): #v_mat should have a zero diagonal
     # If v_mat is passed as a couple, it means that the two matrices of the directed network have been given
@@ -205,7 +227,7 @@ def initialize_fitnesses(rows_degs, cols_degs):
     
     return x, y, good_rows, good_cols
 
-def bicm_calculator(biad_mat, method='root', initial_guess=None):
+def bicm_calculator(biad_mat, method='newton', initial_guess=None, tolerance=10e-8, print_counter=False):
     """
     Computes the bicm given a binary biadjacency matrix.
     Returns the average biadjacency matrix with the probabilities of connection.
@@ -223,14 +245,16 @@ def bicm_calculator(biad_mat, method='root', initial_guess=None):
         elif method == 'ls':
             bicm_obj.solve_least_squares(initial_guess=initial_guess)
         elif method == 'iterative':
-            bicm_obj.solve_iterative(initial_guess=initial_guess)
+            bicm_obj.solve_iterative(initial_guess=initial_guess, tolerance=tolerance, print_counter=print_counter)
+        elif method == 'newton':
+            bicm_obj.solve_iterative(initial_guess=initial_guess, tolerance=tolerance, newton=True, print_counter=print_counter)
         r_avg_mat = bicm_from_fitnesses(bicm_obj.x, bicm_obj.y)
         avg_mat[good_rows[:, None], good_cols] = np.copy(r_avg_mat)
     
-    check_sol(biad_mat, avg_mat)
+#     check_sol(biad_mat, avg_mat)
     return avg_mat
 
-def bicm_light(rows_degs, cols_degs, initial_guess=None, method='iterative'):
+def bicm_light(rows_degs, cols_degs, initial_guess=None, method='iterative', tolerance=10e-8):
     """
     This function computes the bicm without using matrices, processing only the rows and columns degrees
     and returning only the fitnesses instead of the average matrix.
@@ -241,11 +265,13 @@ def bicm_light(rows_degs, cols_degs, initial_guess=None, method='iterative'):
     
     bicm_obj = bicm(np.concatenate((rows_degs, cols_degs)), len(rows_degs), len(cols_degs))
     if method == 'root':
-        bicm_obj.solve_root(initial_guess=initial_guess)
+        bicm_obj.solve_root(initial_guess=initial_guess, tolerance=tolerance)
     elif method == 'ls':
-        bicm_obj.solve_least_squares(initial_guess=initial_guess)
+        bicm_obj.solve_least_squares(initial_guess=initial_guess, tolerance=tolerance)
     elif method == 'iterative':
-        bicm_obj.solve_iterative(initial_guess=initial_guess)
+        bicm_obj.solve_iterative(initial_guess=initial_guess, tolerance=tolerance)
+    elif method == 'newton':
+        bicm_obj.solve_iterative(newton=True, initial_guess=initial_guess, tolerance=tolerance)
     x[good_rows] = bicm_obj.x
     y[good_cols] = bicm_obj.y
     return x, y
@@ -413,53 +439,150 @@ def projection_calculator(biad_mat, avg_mat, alpha=0.05, rows=True, method='pois
     
 #     return np.array(list(zip(np.where(p_vals <= eff_fdr_th)[0], np.where(p_vals <= eff_fdr_th)[1])))
 
+# def indexes_edgelist(edgelist):
+#     """
+#     Creates a new edgelist with the indexes of the nodes instead of the names.
+#     Returns also two dictionaries that keep track of the nodes.
+#     """
+#     rows_dict = {}
+#     cols_dict = {}
+#     inv_rows_dict = {}
+#     inv_cols_dict = {}
+#     rows_degs = []
+#     cols_degs = []
+#     rows_i = 0
+#     cols_i = 0
+#     edgelist_new = []
+#     for edge in edgelist:
+#         if edge[0] not in rows_dict.values():
+#             rows_dict.update({rows_i : edge[0]})
+#             inv_rows_dict.update({edge[0] : rows_i})
+#             rows_degs.append(0)
+#             rows_degs[rows_i] += 1
+#             rows_i += 1
+#         else:
+#             rows_degs[inv_rows_dict[edge[0]]] += 1
+#         if edge[1] not in cols_dict.values():
+#             cols_dict.update({cols_i : edge[1]})
+#             inv_cols_dict.update({edge[1] : cols_i})
+#             cols_degs.append(0)
+#             cols_degs[cols_i] += 1
+#             cols_i += 1
+#         else:
+#             cols_degs[inv_cols_dict[edge[1]]] += 1
+#         edgelist_new.append((inv_rows_dict[edge[0]], inv_cols_dict[edge[1]]))
+#     edgelist_new = np.array(edgelist_new, dtype=np.dtype([('rows', int), ('columns', int)]))
+#     return edgelist_new, np.array(rows_degs), np.array(cols_degs), rows_dict, cols_dict
+
 def indexes_edgelist(edgelist):
     """
     Creates a new edgelist with the indexes of the nodes instead of the names.
     Returns also two dictionaries that keep track of the nodes.
     """
-    rows_dict = {}
-    cols_dict = {}
-    inv_rows_dict = {}
-    inv_cols_dict = {}
-    rows_degs = []
-    cols_degs = []
-    rows_i = 0
-    cols_i = 0
-    edgelist_new = []
-    for edge in edgelist:
-        if edge[0] not in rows_dict.values():
-            rows_dict.update({rows_i : edge[0]})
-            inv_rows_dict.update({edge[0] : rows_i})
-            rows_degs.append(0)
-            rows_degs[rows_i] += 1
-            rows_i += 1
-        else:
-            rows_degs[inv_rows_dict[edge[0]]] += 1
-        if edge[1] not in cols_dict.values():
-            cols_dict.update({cols_i : edge[1]})
-            inv_cols_dict.update({edge[1] : cols_i})
-            cols_degs.append(0)
-            cols_degs[cols_i] += 1
-            cols_i += 1
-        else:
-            cols_degs[inv_cols_dict[edge[1]]] += 1
-        edgelist_new.append((inv_rows_dict[edge[0]], inv_cols_dict[edge[1]]))
+    edgelist = np.array(edgelist, dtype=np.dtype([('source', np.int64), ('target', np.int64)]))
+    unique_rows, rows_degs = np.unique(edgelist['source'], return_counts=True)
+    unique_cols, cols_degs = np.unique(edgelist['target'], return_counts=True)
+    rows_dict = dict(enumerate(unique_rows))
+    cols_dict = dict(enumerate(unique_cols))
+    inv_rows_dict = {v: k for k, v in rows_dict.items()}
+    inv_cols_dict = {v: k for k, v in cols_dict.items()}
+    edgelist_new = [(inv_rows_dict[edge[0]], inv_cols_dict[edge[1]]) for edge in edgelist]
     edgelist_new = np.array(edgelist_new, dtype=np.dtype([('rows', int), ('columns', int)]))
-    return edgelist_new, np.array(rows_degs), np.array(cols_degs), rows_dict, cols_dict
+    return edgelist_new, rows_degs, cols_degs, rows_dict, cols_dict
 
+# def vmotifs_from_edgelist(edgelist, rows_num, cols_num):
+#     """
+#     From the edgelist returns an edgelist of the rows, weighted by the couples' v-motifs number.
+#     """
+#     v_list = []
+#     for rows_i in range(rows_num - 1):
+#         i_neighbors = edgelist['columns'][np.where(edgelist['rows'] == rows_i)]
+#         for rows_j in range(rows_i + 1, rows_num):
+#             j_neighbors = edgelist['columns'][np.where(edgelist['rows'] == rows_j)]
+#             v_ij = len(set(i_neighbors) & set(j_neighbors))
+#             if v_ij > 0:
+#                 v_list.append((rows_i, rows_j, v_ij))
+#     return v_list
+
+@jit(nopython=True)
 def vmotifs_from_edgelist(edgelist, rows_num, cols_num):
     """
     From the edgelist returns an edgelist of the rows, weighted by the couples' v-motifs number.
     """
+    edgelist = edgelist[np.argsort(edgelist['rows'])]
+    rows_edli = edgelist['rows']
+    cols_edli = edgelist['columns']
     v_list = []
-    for rows_i in range(rows_num - 1):
-        i_neighbors = edgelist['columns'][np.where(edgelist['rows'] == rows_i)]
-        for rows_j in range(rows_i + 1, rows_num):
-            j_neighbors = edgelist['columns'][np.where(edgelist['rows'] == rows_j)]
+    i = 0
+    scanned_rows = 0
+    while scanned_rows < rows_num - 1:
+        start_i = i
+        rows_i = rows_edli[start_i]
+        while rows_edli[i] == rows_i:
+            i += 1
+        i_neighbors = cols_edli[start_i: i]
+        start_j = i
+        rows_j = rows_edli[start_j]
+        for j in range(i, len(rows_edli)):
+            if rows_edli[j] != rows_j or j == len(rows_edli) - 1:
+                j_neighbors = cols_edli[start_j: j]
+                if j == len(rows_edli) - 1:
+                    j_neighbors = cols_edli[start_j:]
+                v_ij = len(set(i_neighbors) & set(j_neighbors))
+                if v_ij > 0:
+                    v_list.append((rows_i, rows_j, v_ij))
+                start_j = j
+                rows_j = rows_edli[j]
+        scanned_rows += 1
+    return v_list
+
+@jit(nopython=True)
+def vmotif_iterator(cols_edli, rows_deg, rows_num, i):
+    start_i = rows_deg[:i].sum()
+    i_neighbors = cols_edli[start_i: start_i + rows_deg[i]]
+    start_j = start_i
+    vi_list = []
+    for j in range(i + 1, rows_num):
+        start_j += rows_deg[j - 1]
+        j_neighbors = cols_edli[start_j: start_j + rows_deg[j]]
+        v_ij = len(set(i_neighbors) & set(j_neighbors))
+        if v_ij > 0:
+            vi_list.append((i, j, v_ij))
+    return vi_list
+
+@jit(nopython=True)
+def vmotifs_from_edgelist2(edgelist, rows_num, cols_num, rows_deg, cols_deg):
+    """
+    From the edgelist returns an edgelist of the rows, weighted by the couples' v-motifs number.
+    """
+    edgelist = edgelist[np.argsort(edgelist['rows'])]
+    cols_edli = edgelist['columns']
+    v_list = []
+    for i in range(rows_num - 1):
+        start_i = rows_deg[:i].sum()
+        i_neighbors = cols_edli[start_i: start_i + rows_deg[i]]
+        start_j = start_i
+        for j in range(i + 1, rows_num):
+            start_j += rows_deg[j - 1]
+            j_neighbors = cols_edli[start_j: start_j + rows_deg[j]]
             v_ij = len(set(i_neighbors) & set(j_neighbors))
             if v_ij > 0:
-                v_list.append((rows_i, rows_j, v_ij))
+                v_list.append((i, j, v_ij))
+    return v_list
+
+def myravel(mylist):
+    return [i for sublist in mylist for i in sublist]
+
+# @jit(nopython=True)
+def vmotifs_from_edgelist3(edgelist, rows_num, cols_num, rows_deg, cols_deg):
+    """
+    From the edgelist returns an edgelist of the rows, weighted by the couples' v-motifs number.
+    """
+    edgelist = edgelist[np.argsort(edgelist['rows'])]
+    cols_edli = edgelist['columns']
+    func = partial(vmotif_iterator, cols_edli, rows_deg, rows_num)
+    v_list = parmap(func, np.arange(rows_num - 1))
+    v_list = myravel(v_list)
     return v_list
 
 def pvals_validator(pvals, rows_num, alpha=0.05):
@@ -474,7 +597,6 @@ def pvals_validator(pvals, rows_num, alpha=0.05):
     return eff_fdr_th
 
 def projection_calculator_light(edgelist, x, y, alpha=0.05, rows=True, method='poisson', threads_num=4, return_pvals=False):
-    
     if not rows:
         edgelist = [(edge[1], edge[0]) for edge in edgelist]
 #     nodename_type = type(edgelist[0][0])

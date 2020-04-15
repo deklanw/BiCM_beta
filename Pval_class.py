@@ -150,6 +150,7 @@ class PvalClass:
 #             pvals_list[inverse_pos] = (i, j, pb_obj.pval(int(unique_v[v_index])))
         return pvals_list
     
+#     Va assolutamente rivisto, quei np.where perdono un sacco di tempo
     def _calculate_pvals(self, v_list):
         """
         Internal method for calculating pvalues given an overlap list.
@@ -184,7 +185,7 @@ class PvalClass:
             self.pval_list = [pval for pvals_set in pval_list_coupled for pval in pvals_set]
         return
     
-    def compute_pvals(self, observed_net, method='poisson', threads_num=4): # If threads_num == 1 it should not be parallelized
+    def compute_pvals(self, observed_net, method='poisson', threads_num=1): # If threads_num == 1 it should not be parallelized
         self.method = method
         self.threads_num = threads_num
         if self.light_mode: # It should be a list containing (vertex1, vertex2, number_of_v_motifs)
