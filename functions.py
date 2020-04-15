@@ -597,6 +597,11 @@ def pvals_validator(pvals, rows_num, alpha=0.05):
     return eff_fdr_th
 
 def projection_calculator_light(edgelist, x, y, alpha=0.05, rows=True, method='poisson', threads_num=4, return_pvals=False):
+    """
+    Calculate the projection given only the edge list of the network, the fitnesses of the rows layer and the fitnesses of the columns layer.
+    By default, the projection is calculated using a Poisson approximation. Other implemented choices are the original Poisson-binomial
+    distribution, 
+    """
     if not rows:
         edgelist = [(edge[1], edge[0]) for edge in edgelist]
 #     nodename_type = type(edgelist[0][0])
