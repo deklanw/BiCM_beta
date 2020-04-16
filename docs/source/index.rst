@@ -45,8 +45,12 @@ Guide
    :maxdepth: 2
    :numbered:
    
+   install
+   usage
+   functions
+   FAQ
    license
-   help
+   contacts
 
 
 
