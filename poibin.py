@@ -45,6 +45,7 @@ import numpy as np
 import math
 from scipy.stats import binom
 
+
 class PoiBin:
     
     def __init__(self, p):

@@ -7,6 +7,7 @@ Basic functionalities
 =====================================
 
 To install:
+
 .. code-block::
     
     pip install bicm
@@ -21,15 +22,12 @@ To import the module:
 To generate a BiCM probability matrix of a biadjacency matrix:
 
 .. code-block:: python
-
-    :linenos:
     
     bicm_calculator(biad_mat)
 
 From a degree sequence:
+
 .. code-block:: python
-    
-    :linenos:
     
     bicm_light(rows_degree_sequence, cols_degree_sequence)
 
