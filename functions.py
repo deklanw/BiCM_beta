@@ -187,14 +187,14 @@ def initialize_fitnesses(rows_degs, cols_degs):
     return x, y, good_rows, good_cols
 
 
-def bicm_calculator(biad_mat, method='newton', initial_guess=None, tolerance=10e-8, print_counter=False):
+def bicm_calculator(full_biad_mat, method='iterative', initial_guess=None, tolerance=10e-8, print_counter=False):
     """
     Computes the bicm given a binary biadjacency matrix.
     Returns the average biadjacency matrix with the probabilities of connection.
     If the biadjacency matrix has empty or full rows or columns, the corresponding entries are automatically set to 0 or 1. 
     """
     
-    biad_mat, avg_mat, good_rows, good_cols = initialize_avg_mat(biad_mat)
+    biad_mat, avg_mat, good_rows, good_cols = initialize_avg_mat(full_biad_mat)
     
     if len(biad_mat) > 0:  # Every time the matrix is not perfectly nested
         rows_degs = biad_mat.sum(1)
@@ -211,11 +211,11 @@ def bicm_calculator(biad_mat, method='newton', initial_guess=None, tolerance=10e
         r_avg_mat = bicm_from_fitnesses(bicm_obj.x, bicm_obj.y)
         avg_mat[good_rows[:, None], good_cols] = np.copy(r_avg_mat)
     
-    check_sol(biad_mat, avg_mat)
+    check_sol(full_biad_mat, avg_mat)
     return avg_mat
 
 
-def bicm_light(rows_degs, cols_degs, initial_guess=None, method='iterative', tolerance=10e-8):
+def bicm_light(rows_degs, cols_degs, initial_guess=None, method='iterative', tolerance=10e-8, print_counter=False):
     """
     This function computes the bicm without using matrices, processing only the rows and columns degrees
     and returning only the fitnesses instead of the average matrix.
@@ -230,9 +230,9 @@ def bicm_light(rows_degs, cols_degs, initial_guess=None, method='iterative', tol
     elif method == 'ls':
         bicm_obj.solve_least_squares(initial_guess=initial_guess, tolerance=tolerance)
     elif method == 'iterative':
-        bicm_obj.solve_iterative(initial_guess=initial_guess, tolerance=tolerance)
+        bicm_obj.solve_iterative(initial_guess=initial_guess, tolerance=tolerance, print_counter=print_counter)
     elif method == 'newton':
-        bicm_obj.solve_iterative(newton=True, initial_guess=initial_guess, tolerance=tolerance)
+        bicm_obj.solve_iterative(newton=True, initial_guess=initial_guess, tolerance=tolerance, print_counter=print_counter)
     x[good_rows] = bicm_obj.x
     y[good_cols] = bicm_obj.y
     check_sol_light(x, y, rows_degs, cols_degs)
